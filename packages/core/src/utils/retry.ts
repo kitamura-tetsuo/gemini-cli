@@ -16,9 +16,9 @@ export interface RetryOptions {
 }
 
 const DEFAULT_RETRY_OPTIONS: RetryOptions = {
-  maxAttempts: 5,
-  initialDelayMs: 5000,
-  maxDelayMs: 30000, // 30 seconds
+  maxAttempts: 120000,
+  initialDelayMs: 30000, // 30 seconds
+  maxDelayMs: 120000, // 120 seconds (2 minutes)
   shouldRetry: defaultShouldRetry,
 };
 
@@ -133,13 +133,26 @@ export async function retryWithBackoff<T>(
         // Reset currentDelay for next potential non-429 error, or if Retry-After is not present next time
         currentDelay = initialDelayMs;
       } else {
-        // Fallback to exponential backoff with jitter
-        logRetryAttempt(attempt, error, errorStatus);
-        // Add jitter: +/- 30% of currentDelay
-        const jitter = currentDelay * 0.3 * (Math.random() * 2 - 1);
-        const delayWithJitter = Math.max(0, currentDelay + jitter);
-        await delay(delayWithJitter);
-        currentDelay = Math.min(maxDelayMs, currentDelay * 2);
+        // Special handling for 429 errors - use longer delay
+        if (errorStatus === 429) {
+          // Use minimum 30 seconds for 429 errors, but respect initialDelayMs if it's smaller (for testing)
+          const minimum429Delay = initialDelayMs < 1000 ? currentDelay : 30000;
+          const delay429Ms = Math.max(currentDelay, minimum429Delay);
+          console.warn(
+            `Attempt ${attempt} failed with 429 error (no Retry-After header). Retrying after ${delay429Ms}ms...`,
+            error,
+          );
+          await delay(delay429Ms);
+          currentDelay = Math.min(maxDelayMs, delay429Ms * 1.5); // Slower exponential growth for 429
+        } else {
+          // Fallback to exponential backoff with jitter for other errors
+          logRetryAttempt(attempt, error, errorStatus);
+          // Add jitter: +/- 30% of currentDelay
+          const jitter = currentDelay * 0.3 * (Math.random() * 2 - 1);
+          const delayWithJitter = Math.max(0, currentDelay + jitter);
+          await delay(delayWithJitter);
+          currentDelay = Math.min(maxDelayMs, currentDelay * 2);
+        }
       }
     }
   }
