@@ -27,7 +27,7 @@ const root = join(__dirname, '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
 
 // check build status, write warnings to file for app to display if needed
-execSync('node ./scripts/check-build-status.js', {
+execSync(`node ${join(root, 'scripts/check-build-status.js')}`, {
   stdio: 'inherit',
   cwd: root,
 });
@@ -35,7 +35,7 @@ execSync('node ./scripts/check-build-status.js', {
 const nodeArgs = [];
 let sandboxCommand = undefined;
 try {
-  sandboxCommand = execSync('node scripts/sandbox_command.js', {
+  sandboxCommand = execSync(`node ${join(root, 'scripts/sandbox_command.js')}`, {
     cwd: root,
   })
     .toString()
@@ -55,7 +55,7 @@ if (process.env.DEBUG && !sandboxCommand) {
   }
 }
 
-nodeArgs.push('./packages/cli');
+nodeArgs.push(join(root, 'packages/cli'));
 nodeArgs.push(...process.argv.slice(2));
 
 const env = {
