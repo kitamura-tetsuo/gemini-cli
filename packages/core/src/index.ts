@@ -31,10 +31,12 @@ export * from './utils/errors.js';
 export * from './utils/getFolderStructure.js';
 export * from './utils/memoryDiscovery.js';
 export * from './utils/gitIgnoreParser.js';
+export * from './utils/gitUtils.js';
 export * from './utils/editor.js';
 export * from './utils/quotaErrorDetection.js';
 export * from './utils/fileUtils.js';
 export * from './utils/retry.js';
+export * from './utils/shell-utils.js';
 export * from './utils/systemEncoding.js';
 export * from './utils/textUtils.js';
 export * from './utils/formatters.js';
@@ -46,6 +48,8 @@ export * from './services/gitService.js';
 // Export IDE specific logic
 export * from './ide/ide-client.js';
 export * from './ide/ideContext.js';
+export * from './ide/ide-installer.js';
+export { getIdeDisplayName, DetectedIde } from './ide/detect-ide.js';
 
 // Export Shell Execution Service
 export * from './services/shellExecutionService.js';
