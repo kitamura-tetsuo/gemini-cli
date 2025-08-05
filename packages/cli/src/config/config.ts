@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+import { homedir } from 'node:os';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import process from 'node:process';
@@ -77,6 +80,11 @@ export async function parseArguments(): Promise<CliArgs> {
       type: 'string',
       description: `Model`,
       default: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+    })
+    .option('force-model', {
+      type: 'boolean',
+      description: 'Force the use of the specified model and prevent automatic switching',
+      default: false,
     })
     .option('force-model', {
       type: 'boolean',
@@ -230,7 +238,11 @@ export async function parseArguments(): Promise<CliArgs> {
     });
 
   yargsInstance.wrap(yargsInstance.terminalWidth());
-  return yargsInstance.argv;
+  const result = yargsInstance.parseSync();
+
+  // The import format is now only controlled by settings.memoryImportFormat
+  // We no longer accept it as a CLI argument
+  return result as CliArgs;
 }
 
 // This function is now a thin wrapper around the server's implementation.
@@ -242,21 +254,31 @@ export async function loadHierarchicalGeminiMemory(
   fileService: FileDiscoveryService,
   settings: Settings,
   extensionContextFilePaths: string[] = [],
+  memoryImportFormat: 'flat' | 'tree' = 'tree',
   fileFilteringOptions?: FileFilteringOptions,
 ): Promise<{ memoryContent: string; fileCount: number }> {
+  // FIX: Use real, canonical paths for a reliable comparison to handle symlinks.
+  const realCwd = fs.realpathSync(path.resolve(currentWorkingDirectory));
+  const realHome = fs.realpathSync(path.resolve(homedir()));
+  const isHomeDirectory = realCwd === realHome;
+
+  // If it is the home directory, pass an empty string to the core memory
+  // function to signal that it should skip the workspace search.
+  const effectiveCwd = isHomeDirectory ? '' : currentWorkingDirectory;
+
   if (debugMode) {
     logger.debug(
-      `CLI: Delegating hierarchical memory load to server for CWD: ${currentWorkingDirectory}`,
+      `CLI: Delegating hierarchical memory load to server for CWD: ${currentWorkingDirectory} (memoryImportFormat: ${memoryImportFormat})`,
     );
   }
 
-  // Directly call the server function.
-  // The server function will use its own homedir() for the global path.
+  // Directly call the server function with the corrected path.
   return loadServerHierarchicalMemory(
-    currentWorkingDirectory,
+    effectiveCwd,
     debugMode,
     fileService,
     extensionContextFilePaths,
+    memoryImportFormat,
     fileFilteringOptions,
     settings.memoryDiscoveryMaxDirs,
   );
@@ -272,8 +294,9 @@ export async function loadCliConfig(
     argv.debug ||
     [process.env.DEBUG, process.env.DEBUG_MODE].some(
       (v) => v === 'true' || v === '1',
-    );
-
+    ) ||
+    false;
+  const memoryImportFormat = settings.memoryImportFormat || 'tree';
   const ideMode = settings.ideMode ?? false;
 
   const ideModeFeature =
@@ -320,6 +343,7 @@ export async function loadCliConfig(
     fileService,
     settings,
     extensionContextFilePaths,
+    memoryImportFormat,
     fileFiltering,
   );
 
@@ -428,7 +452,7 @@ export async function loadCliConfig(
     cwd: process.cwd(),
     fileDiscoveryService: fileService,
     bugCommand: settings.bugCommand,
-    model: argv.model!,
+    model: argv.model || settings.model || DEFAULT_GEMINI_MODEL,
     forceModel: argv['force-model'] || false,
     extensionContextFilePaths,
     maxSessionTurns: settings.maxSessionTurns ?? -1,
