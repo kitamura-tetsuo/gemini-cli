@@ -5,22 +5,26 @@
  */
 
 import {
-  Config,
-  DetectedIde,
-  IDEConnectionStatus,
-  getIdeDisplayName,
-  getIdeInstaller,
+  type Config,
   IdeClient,
   type File,
-  ideContext,
+  logIdeConnection,
+  IdeConnectionEvent,
+  IdeConnectionType,
+} from '@google/gemini-cli-core';
+import {
+  getIdeInstaller,
+  IDEConnectionStatus,
+  ideContextStore,
+  GEMINI_CLI_COMPANION_EXTENSION_NAME,
 } from '@google/gemini-cli-core';
 import path from 'node:path';
-import {
+import type {
   CommandContext,
   SlashCommand,
   SlashCommandActionReturn,
-  CommandKind,
 } from './types.js';
+import { CommandKind } from './types.js';
 import { SettingScope } from '../../config/settings.js';
 
 function getIdeStatusMessage(ideClient: IdeClient): {
@@ -72,7 +76,10 @@ function formatFileList(openFiles: File[]): string {
     })
     .join('\n');
 
-  return `\n\nOpen files:\n${fileList}`;
+  const infoMessage = `
+(Note: The file list is limited to a number of recently accessed files within your workspace and only includes local files on disk)`;
+
+  return `\n\nOpen files:\n${fileList}\n${infoMessage}`;
 }
 
 async function getIdeStatusMessageWithFiles(ideClient: IdeClient): Promise<{
@@ -83,7 +90,7 @@ async function getIdeStatusMessageWithFiles(ideClient: IdeClient): Promise<{
   switch (connection.status) {
     case IDEConnectionStatus.Connected: {
       let content = `🟢 Connected to ${ideClient.getDetectedIdeDisplayName()}`;
-      const context = ideContext.getIdeContext();
+      const context = ideContextStore.get();
       const openFiles = context?.workspaceState?.openFiles;
       if (openFiles && openFiles.length > 0) {
         content += formatFileList(openFiles);
@@ -111,13 +118,24 @@ async function getIdeStatusMessageWithFiles(ideClient: IdeClient): Promise<{
   }
 }
 
-export const ideCommand = (config: Config | null): SlashCommand | null => {
-  if (!config || !config.getIdeModeFeature()) {
-    return null;
+async function setIdeModeAndSyncConnection(
+  config: Config,
+  value: boolean,
+): Promise<void> {
+  config.setIdeMode(value);
+  const ideClient = await IdeClient.getInstance();
+  if (value) {
+    await ideClient.connect();
+    logIdeConnection(config, new IdeConnectionEvent(IdeConnectionType.SESSION));
+  } else {
+    await ideClient.disconnect();
   }
-  const ideClient = config.getIdeClient();
+}
+
+export const ideCommand = async (): Promise<SlashCommand> => {
+  const ideClient = await IdeClient.getInstance();
   const currentIDE = ideClient.getCurrentIde();
-  if (!currentIDE || !ideClient.getDetectedIdeDisplayName()) {
+  if (!currentIDE) {
     return {
       name: 'ide',
       description: 'manage IDE integration',
@@ -126,10 +144,7 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
         ({
           type: 'message',
           messageType: 'error',
-          content: `IDE integration is not supported in your current environment. To use this feature, run Gemini CLI in one of these supported IDEs: ${Object.values(
-            DetectedIde,
-          ).map((ide) => getIdeDisplayName(ide))}
-            .join(', ')}`,
+          content: `IDE integration is not supported in your current environment. To use this feature, run Gemini CLI in one of these supported IDEs: VS Code or VS Code forks.`,
         }) as const,
     };
   }
@@ -166,7 +181,7 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
         context.ui.addItem(
           {
             type: 'error',
-            text: `No installer is available for ${ideClient.getDetectedIdeDisplayName()}. Please install the IDE companion manually from its marketplace.`,
+            text: `No installer is available for ${ideClient.getDetectedIdeDisplayName()}. Please install the '${GEMINI_CLI_COMPANION_EXTENSION_NAME}' extension manually from the marketplace.`,
           },
           Date.now(),
         );
@@ -182,10 +197,6 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
       );
 
       const result = await installer.install();
-      if (result.success) {
-        config.setIdeMode(true);
-        context.services.settings.setValue(SettingScope.User, 'ideMode', true);
-      }
       context.ui.addItem(
         {
           type: result.success ? 'info' : 'error',
@@ -193,6 +204,43 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
         },
         Date.now(),
       );
+      if (result.success) {
+        context.services.settings.setValue(
+          SettingScope.User,
+          'ide.enabled',
+          true,
+        );
+        // Poll for up to 5 seconds for the extension to activate.
+        for (let i = 0; i < 10; i++) {
+          await setIdeModeAndSyncConnection(context.services.config!, true);
+          if (
+            ideClient.getConnectionStatus().status ===
+            IDEConnectionStatus.Connected
+          ) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        const { messageType, content } = getIdeStatusMessage(ideClient);
+        if (messageType === 'error') {
+          context.ui.addItem(
+            {
+              type: messageType,
+              text: `Failed to automatically enable IDE integration. To fix this, run the CLI in a new terminal window.`,
+            },
+            Date.now(),
+          );
+        } else {
+          context.ui.addItem(
+            {
+              type: messageType,
+              text: content,
+            },
+            Date.now(),
+          );
+        }
+      }
     },
   };
 
@@ -201,8 +249,12 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
     description: 'enable IDE integration',
     kind: CommandKind.BUILT_IN,
     action: async (context: CommandContext) => {
-      context.services.settings.setValue(SettingScope.User, 'ideMode', true);
-      await config.setIdeModeAndSyncConnection(true);
+      context.services.settings.setValue(
+        SettingScope.User,
+        'ide.enabled',
+        true,
+      );
+      await setIdeModeAndSyncConnection(context.services.config!, true);
       const { messageType, content } = getIdeStatusMessage(ideClient);
       context.ui.addItem(
         {
@@ -219,8 +271,12 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
     description: 'disable IDE integration',
     kind: CommandKind.BUILT_IN,
     action: async (context: CommandContext) => {
-      context.services.settings.setValue(SettingScope.User, 'ideMode', false);
-      await config.setIdeModeAndSyncConnection(false);
+      context.services.settings.setValue(
+        SettingScope.User,
+        'ide.enabled',
+        false,
+      );
+      await setIdeModeAndSyncConnection(context.services.config!, false);
       const { messageType, content } = getIdeStatusMessage(ideClient);
       context.ui.addItem(
         {
@@ -232,13 +288,11 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
     },
   };
 
-  const ideModeEnabled = config.getIdeMode();
-  if (ideModeEnabled) {
-    ideSlashCommand.subCommands = [
-      disableCommand,
-      statusCommand,
-      installCommand,
-    ];
+  const { status } = ideClient.getConnectionStatus();
+  const isConnected = status === IDEConnectionStatus.Connected;
+
+  if (isConnected) {
+    ideSlashCommand.subCommands = [statusCommand, disableCommand];
   } else {
     ideSlashCommand.subCommands = [
       enableCommand,

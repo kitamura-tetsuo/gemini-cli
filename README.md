@@ -1,6 +1,7 @@
 # Gemini CLI
 
 [![Gemini CLI CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
+[![Gemini CLI E2E](https://github.com/google-gemini/gemini-cli/actions/workflows/e2e.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/e2e.yml)
 [![Version](https://img.shields.io/npm/v/@google/gemini-cli)](https://www.npmjs.com/package/@google/gemini-cli)
 [![License](https://img.shields.io/github/license/google-gemini/gemini-cli)](https://github.com/google-gemini/gemini-cli/blob/main/LICENSE)
 
@@ -45,33 +46,68 @@ brew install gemini-cli
 - Node.js version 20 or higher
 - macOS, Linux, or Windows
 
+## Release Cadence and Tags
+
+See [Releases](./docs/releases.md) for more details.
+
+### Preview
+
+New preview releases will be published each week at UTC 2359 on Tuesdays. These releases will not have been fully vetted and may contain regressions or other outstanding issues. Please help us test and install with `preview` tag.
+
+```bash
+npm install -g @google/gemini-cli@preview
+```
+
+### Stable
+
+- New stable releases will be published each week at UTC 2000 on Tuesdays, this will be the full promotion of last week's `preview` release + any bug fixes and validations. Use `latest` tag.
+
+```bash
+npm install -g @google/gemini-cli@latest
+```
+
+### Nightly
+
+- New releases will be published each week at UTC 0000 each day, This will be all changes from the main branch as represented at time of release. It should be assumed there are pending validations and issues. Use `nightly` tag.
+
+```bash
+npm install -g @google/gemini-cli@nightly
+```
+
 ## 📋 Key Features
 
-With Gemini CLI you can:
+### Code Understanding & Generation
 
-- **Code Understanding & Generation**
-  - Query and edit large codebases
-  - Generate new apps from PDFs, images, or sketches using multimodal capabilities
-  - Debug issues and troubleshoot with natural language
-- **Automation & Integration**
-  - Automate operational tasks like querying pull requests or handling complex rebases
-  - Use MCP servers to connect new capabilities, including [media generation with Imagen, Veo or Lyria](https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio/tree/main/experiments/mcp-genmedia)
-  - Run non-interactively in scripts for workflow automation
-- **Advanced Capabilities**
-  - Ground your queries with built-in [Google Search](https://ai.google.dev/gemini-api/docs/grounding) for real-time information
-  - Conversation checkpointing to save and resume complex sessions
-  - Custom context files (GEMINI.md) to tailor behavior for your projects
+- Query and edit large codebases
+- Generate new apps from PDFs, images, or sketches using multimodal capabilities
+- Debug issues and troubleshoot with natural language
 
-- **🔗 GitHub Integration**
-  - Use the Gemini CLI GitHub Action for automated PR reviews
-  - Automated issue triage and on-demand AI assistance directly in your repositories
-  - Seamless integration with your GitHub workflows
+### Automation & Integration
+
+- Automate operational tasks like querying pull requests or handling complex rebases
+- Use MCP servers to connect new capabilities, including [media generation with Imagen, Veo or Lyria](https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio/tree/main/experiments/mcp-genmedia)
+- Run non-interactively in scripts for workflow automation
+
+### Advanced Capabilities
+
+- Ground your queries with built-in [Google Search](https://ai.google.dev/gemini-api/docs/grounding) for real-time information
+- Conversation checkpointing to save and resume complex sessions
+- Custom context files (GEMINI.md) to tailor behavior for your projects
+
+### GitHub Integration
+
+Integrate Gemini CLI directly into your GitHub workflows with [**Gemini CLI GitHub Action**](https://github.com/google-github-actions/run-gemini-cli):
+
+- **Pull Request Reviews**: Automated code review with contextual feedback and suggestions
+- **Issue Triage**: Automated labeling and prioritization of GitHub issues based on content analysis
+- **On-demand Assistance**: Mention `@gemini-cli` in issues and pull requests for help with debugging, explanations, or task delegation
+- **Custom Workflows**: Build automated, scheduled and on-demand workflows tailored to your team's needs
 
 ## 🔐 Authentication Options
 
 Choose the authentication method that best fits your needs:
 
-### Option 1: OAuth login (Using your Google Account)
+### Option 1: Login with Google (OAuth login using your Google Account)
 
 **✨ Best for:** Individual developers as well as anyone who has a Gemini Code Assist License. (see [quota limits and terms of service](https://cloud.google.com/gemini/docs/quotas) for details)
 
@@ -82,7 +118,7 @@ Choose the authentication method that best fits your needs:
 - **No API key management** - just sign in with your Google account
 - **Automatic updates** to latest models
 
-#### Start Gemini CLI, then choose OAuth and follow the browser authentication flow when prompted
+#### Start Gemini CLI, then choose _Login with Google_ and follow the browser authentication flow when prompted
 
 ```bash
 gemini
@@ -155,35 +191,37 @@ gemini -m gemini-2.5-flash
 
 #### Non-interactive mode for scripts
 
+Get a simple text response:
+
 ```bash
 gemini -p "Explain the architecture of this codebase"
+```
+
+For more advanced scripting, including how to parse JSON and handle errors, use
+the `--output-format json` flag to get structured output:
+
+```bash
+gemini -p "Explain the architecture of this codebase" --output-format json
 ```
 
 ### Quick Examples
 
 #### Start a new project
 
-````bash
+```bash
 cd new-project/
 gemini
 > Write me a Discord bot that answers questions using a FAQ.md file I will provide
+```
 
 #### Analyze existing code
+
 ```bash
 git clone https://github.com/google-gemini/gemini-cli
 cd gemini-cli
 gemini
 > Give me a summary of all of the changes that went in yesterday
-````
-
-## 🔗 GitHub Integration
-
-Integrate Gemini CLI directly into your GitHub workflows with the [**Gemini CLI GitHub Action**](https://github.com/google-github-actions/run-gemini-cli). Key features include:
-
-- **Pull Request Reviews**: Automatically review pull requests when they're opened.
-- **Issue Triage**: Automatically triage and label GitHub issues.
-- **On-demand Collaboration**: Mention `@gemini-cli` in issues and pull requests for assistance and task delegation.
-- **Custom Workflows**: Set up your own scheduled tasks and event-driven automations.
+```
 
 ## 📚 Documentation
 
@@ -214,7 +252,7 @@ Integrate Gemini CLI directly into your GitHub workflows with the [**Gemini CLI 
 ### Advanced Topics
 
 - [**Architecture Overview**](./docs/architecture.md) - How Gemini CLI works
-- [**IDE Integration**](./docs/extension.md) - VS Code companion
+- [**IDE Integration**](./docs/ide-integration.md) - VS Code companion
 - [**Sandboxing & Security**](./docs/sandbox.md) - Safe execution environments
 - [**Enterprise Deployment**](./docs/deployment.md) - Docker, system-wide config
 - [**Telemetry & Monitoring**](./docs/telemetry.md) - Usage tracking
