@@ -46,6 +46,36 @@ brew install gemini-cli
 - Node.js version 20 or higher
 - macOS, Linux, or Windows
 
+### Installing from a Fork
+
+If you have forked the gemini-cli repository and want to install your forked version:
+
+```bash
+# Clone your fork
+git clone https://github.com/YOUR_USERNAME/gemini-cli.git && cd gemini-cli
+
+# Install dependencies, build, and install globally
+npm install && npm run build && npm install -g .
+```
+
+Replace `YOUR_USERNAME` with your actual GitHub username. This will install your forked version globally, allowing you to use the `gemini` command with any modifications you've made.
+
+#### Development Workflow
+
+For development purposes, you can also run directly from source without installing:
+
+```bash
+# Clone your fork
+git clone https://github.com/YOUR_USERNAME/gemini-cli.git
+cd gemini-cli
+
+# Install dependencies
+npm install
+
+# Run directly from source
+npm start
+```
+
 ## Release Cadence and Tags
 
 See [Releases](./docs/releases.md) for more details.

@@ -58,7 +58,7 @@ const logger = {
 
 export interface CliArgs {
   model: string | undefined;
-  'force-model': boolean | undefined;
+  'force-model'?: boolean;
   sandbox: boolean | string | undefined;
   sandboxImage: string | undefined;
   debug: boolean | undefined;
@@ -172,17 +172,13 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
           alias: 'm',
           type: 'string',
           description: `Model`,
-          default: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
-    })
-    .option('force-model', {
-      type: 'boolean',
-      description: 'Force the use of the specified model and prevent automatic switching',
-      default: false,
-    })
-    .option('force-model', {
-      type: 'boolean',
-      description: 'Force the use of the specified model and prevent automatic switching',
-      default: false,
+          default: process.env['GEMINI_MODEL'] || DEFAULT_GEMINI_MODEL,
+        })
+        .option('force-model', {
+          type: 'boolean',
+          description:
+            'Force the use of the specified model and prevent automatic switching',
+          default: false,
         })
         .option('prompt', {
           alias: 'p',
