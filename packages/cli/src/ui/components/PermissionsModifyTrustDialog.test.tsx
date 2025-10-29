@@ -4,14 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/// <reference types="vitest/globals" />
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
 import { renderWithProviders } from '../../test-utils/render.js';
 import { PermissionsModifyTrustDialog } from './PermissionsModifyTrustDialog.js';
 import { TrustLevel } from '../../config/trustedFolders.js';
-import { waitFor, act } from '@testing-library/react';
+import { act } from 'react';
 import * as processUtils from '../../utils/processUtils.js';
 import { usePermissionsModifyTrust } from '../hooks/usePermissionsModifyTrust.js';
 
@@ -19,7 +17,6 @@ import { usePermissionsModifyTrust } from '../hooks/usePermissionsModifyTrust.js
 const mockedCwd = vi.hoisted(() => vi.fn());
 const mockedLoadTrustedFolders = vi.hoisted(() => vi.fn());
 const mockedIsWorkspaceTrusted = vi.hoisted(() => vi.fn());
-const mockedUseSettings = vi.hoisted(() => vi.fn());
 
 // Mock the modules themselves
 vi.mock('node:process', async (importOriginal) => {
@@ -40,10 +37,6 @@ vi.mock('../../config/trustedFolders.js', () => ({
   },
 }));
 
-vi.mock('../contexts/SettingsContext.js', () => ({
-  useSettings: mockedUseSettings,
-}));
-
 vi.mock('../hooks/usePermissionsModifyTrust.js');
 
 describe('PermissionsModifyTrustDialog', () => {
@@ -51,6 +44,7 @@ describe('PermissionsModifyTrustDialog', () => {
   let mockCommitTrustLevelChange: Mock;
 
   beforeEach(() => {
+    mockedCwd.mockReturnValue('/test/dir');
     mockUpdateTrustLevel = vi.fn();
     mockCommitTrustLevelChange = vi.fn();
     vi.mocked(usePermissionsModifyTrust).mockReturnValue({
@@ -74,7 +68,7 @@ describe('PermissionsModifyTrustDialog', () => {
       <PermissionsModifyTrustDialog onExit={vi.fn()} addItem={vi.fn()} />,
     );
 
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(lastFrame()).toContain('Modify Trust Level');
       expect(lastFrame()).toContain('Folder: /test/dir');
       expect(lastFrame()).toContain('Current Level: DO_NOT_TRUST');
@@ -96,7 +90,7 @@ describe('PermissionsModifyTrustDialog', () => {
       <PermissionsModifyTrustDialog onExit={vi.fn()} addItem={vi.fn()} />,
     );
 
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(lastFrame()).toContain(
         'Note: This folder behaves as a trusted folder because one of the parent folders is trusted.',
       );
@@ -118,10 +112,21 @@ describe('PermissionsModifyTrustDialog', () => {
       <PermissionsModifyTrustDialog onExit={vi.fn()} addItem={vi.fn()} />,
     );
 
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(lastFrame()).toContain(
         'Note: This folder behaves as a trusted folder because the connected IDE workspace is trusted.',
       );
+    });
+  });
+
+  it('should render the labels with folder names', async () => {
+    const { lastFrame } = renderWithProviders(
+      <PermissionsModifyTrustDialog onExit={vi.fn()} addItem={vi.fn()} />,
+    );
+
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Trust this folder (dir)');
+      expect(lastFrame()).toContain('Trust parent folder (test)');
     });
   });
 
@@ -131,13 +136,13 @@ describe('PermissionsModifyTrustDialog', () => {
       <PermissionsModifyTrustDialog onExit={onExit} addItem={vi.fn()} />,
     );
 
-    await waitFor(() => expect(lastFrame()).not.toContain('Loading...'));
+    await vi.waitFor(() => expect(lastFrame()).not.toContain('Loading...'));
 
     act(() => {
-      stdin.write('\x1b'); // escape key
+      stdin.write('\u001b[27u'); // Kitty escape key
     });
 
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(onExit).toHaveBeenCalled();
     });
   });
@@ -162,11 +167,11 @@ describe('PermissionsModifyTrustDialog', () => {
       <PermissionsModifyTrustDialog onExit={onExit} addItem={vi.fn()} />,
     );
 
-    await waitFor(() => expect(lastFrame()).not.toContain('Loading...'));
+    await vi.waitFor(() => expect(lastFrame()).not.toContain('Loading...'));
 
     act(() => stdin.write('r')); // Press 'r' to restart
 
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(mockCommitTrustLevelChange).toHaveBeenCalled();
       expect(mockRelaunchApp).toHaveBeenCalled();
       expect(onExit).toHaveBeenCalled();
@@ -192,11 +197,11 @@ describe('PermissionsModifyTrustDialog', () => {
       <PermissionsModifyTrustDialog onExit={onExit} addItem={vi.fn()} />,
     );
 
-    await waitFor(() => expect(lastFrame()).not.toContain('Loading...'));
+    await vi.waitFor(() => expect(lastFrame()).not.toContain('Loading...'));
 
-    act(() => stdin.write('\x1b')); // Press escape
+    act(() => stdin.write('\u001b[27u')); // Press kitty escape key
 
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(mockCommitTrustLevelChange).not.toHaveBeenCalled();
       expect(onExit).toHaveBeenCalled();
     });
