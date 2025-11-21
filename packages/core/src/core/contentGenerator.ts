@@ -15,6 +15,7 @@ import type {
 import { GoogleGenAI } from '@google/genai';
 import { createCodeAssistContentGenerator } from '../code_assist/codeAssist.js';
 import type { Config } from '../config/config.js';
+import { loadApiKey } from './apiKeyCredentialStorage.js';
 
 import type { UserTierId } from '../code_assist/types.js';
 import { LoggingContentGenerator } from './loggingContentGenerator.js';
@@ -47,7 +48,8 @@ export enum AuthType {
   LOGIN_WITH_GOOGLE = 'oauth-personal',
   USE_GEMINI = 'gemini-api-key',
   USE_VERTEX_AI = 'vertex-ai',
-  CLOUD_SHELL = 'cloud-shell',
+  LEGACY_CLOUD_SHELL = 'cloud-shell',
+  COMPUTE_ADC = 'compute-default-credentials',
 }
 
 export type ContentGeneratorConfig = {
@@ -57,11 +59,12 @@ export type ContentGeneratorConfig = {
   proxy?: string;
 };
 
-export function createContentGeneratorConfig(
+export async function createContentGeneratorConfig(
   config: Config,
   authType: AuthType | undefined,
-): ContentGeneratorConfig {
-  const geminiApiKey = process.env['GEMINI_API_KEY'] || undefined;
+): Promise<ContentGeneratorConfig> {
+  const geminiApiKey =
+    (await loadApiKey()) || process.env['GEMINI_API_KEY'] || undefined;
   const googleApiKey = process.env['GOOGLE_API_KEY'] || undefined;
   const googleCloudProject =
     process.env['GOOGLE_CLOUD_PROJECT'] ||
@@ -77,7 +80,7 @@ export function createContentGeneratorConfig(
   // If we are using Google auth or we are in Cloud Shell, there is nothing else to validate for now
   if (
     authType === AuthType.LOGIN_WITH_GOOGLE ||
-    authType === AuthType.CLOUD_SHELL
+    authType === AuthType.COMPUTE_ADC
   ) {
     return contentGeneratorConfig;
   }
@@ -118,7 +121,7 @@ export async function createContentGenerator(
     };
     if (
       config.authType === AuthType.LOGIN_WITH_GOOGLE ||
-      config.authType === AuthType.CLOUD_SHELL
+      config.authType === AuthType.COMPUTE_ADC
     ) {
       const httpOptions = { headers: baseHeaders };
       return new LoggingContentGenerator(

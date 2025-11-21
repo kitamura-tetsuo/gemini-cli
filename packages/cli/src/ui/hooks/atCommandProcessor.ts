@@ -13,6 +13,7 @@ import {
   getErrorMessage,
   isNodeError,
   unescapePath,
+  ReadManyFilesTool,
 } from '@google/gemini-cli-core';
 import type { HistoryItem, IndividualToolCallDisplay } from '../types.js';
 import { ToolCallStatus } from '../types.js';
@@ -153,7 +154,7 @@ export async function handleAtCommand({
   };
 
   const toolRegistry = config.getToolRegistry();
-  const readManyFilesTool = toolRegistry.getTool('read_many_files');
+  const readManyFilesTool = new ReadManyFilesTool(config);
   const globTool = toolRegistry.getTool('glob');
 
   if (!readManyFilesTool) {
@@ -243,8 +244,7 @@ export async function handleAtCommand({
           : pathName;
 
         if (stats.isDirectory()) {
-          currentPathSpec =
-            relativePath + (relativePath.endsWith(path.sep) ? `**` : `/**`);
+          currentPathSpec = path.join(relativePath, '**');
           onDebugMessage(
             `Path ${pathName} resolved to directory, using glob: ${currentPathSpec}`,
           );
@@ -416,7 +416,7 @@ export async function handleAtCommand({
   const processedQueryParts: PartUnion[] = [{ text: initialQueryText }];
 
   const toolArgs = {
-    paths: pathSpecsToRead,
+    include: pathSpecsToRead,
     file_filtering_options: {
       respect_git_ignore: respectFileIgnore.respectGitIgnore,
       respect_gemini_ignore: respectFileIgnore.respectGeminiIgnore,

@@ -53,11 +53,22 @@ All submissions, including submissions by project members, require review. We
 use [GitHub pull requests](https://docs.github.com/articles/about-pull-requests)
 for this purpose.
 
-### Self assigning issues
+If your pull request involves changes to `packages/cli` (the frontend), we
+recommend running our automated frontend review tool. **Note: This tool is
+currently experimental.** It helps detect common React anti-patterns, testing
+issues, and other frontend-specific best practices that are easy to miss.
 
-If you're looking for an issue to work on, check out our list of issues that are
-labeled
-["help wanted"](https://github.com/google-gemini/gemini-cli/issues?q=is%3Aissue+state%3Aopen+label%3A%22help+wanted%22).
+To run the review tool, enter the following command from within Gemini CLI:
+
+```text
+/review-frontend <PR_NUMBER>
+```
+
+Replace `<PR_NUMBER>` with your pull request number. Authors are encouraged to
+run this on their own PRs for self-review, and reviewers should use it to
+augment their manual review process.
+
+### Self assigning issues
 
 To assign an issue to yourself, simply add a comment with the text `/assign`.
 The comment must contain only that text and nothing else. This command will

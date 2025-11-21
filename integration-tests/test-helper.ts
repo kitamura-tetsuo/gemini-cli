@@ -192,7 +192,12 @@ export class InteractiveRun {
       timeout,
       200,
     );
-    expect(found, `Did not find expected text: "${text}"`).toBe(true);
+    expect(
+      found,
+      `Did not find expected text: "${text}". Output was:\n${stripAnsi(
+        this.output,
+      )}`,
+    ).toBe(true);
   }
 
   // This types slowly to make sure command is correct, but only work for short
@@ -218,6 +223,13 @@ export class InteractiveRun {
         );
       }
     }
+  }
+
+  // Types an entire string at once, necessary for some things like commands
+  // but may run into paste detection issues for larger strings.
+  async sendText(text: string) {
+    this.ptyProcess.write(text);
+    await new Promise((resolve) => setTimeout(resolve, 5));
   }
 
   // Simulates typing a string one character at a time to avoid paste detection.
@@ -296,6 +308,7 @@ export class TestRig {
         // Nightly releases sometimes becomes out of sync with local code and
         // triggers auto-update, which causes tests to fail.
         disableAutoUpdate: true,
+        previewFeatures: false,
       },
       telemetry: {
         enabled: true,
@@ -311,6 +324,8 @@ export class TestRig {
       model: DEFAULT_GEMINI_MODEL,
       sandbox:
         env['GEMINI_SANDBOX'] !== 'false' ? env['GEMINI_SANDBOX'] : false,
+      // Don't show the IDE connection dialog when running from VsCode
+      ide: { enabled: false, hasSeenNudge: true },
       ...options.settings, // Allow tests to override/add settings
     };
     writeFileSync(
@@ -386,13 +401,13 @@ export class TestRig {
     };
 
     if (typeof promptOrOptions === 'string') {
-      commandArgs.push('--prompt', promptOrOptions);
+      commandArgs.push(promptOrOptions);
     } else if (
       typeof promptOrOptions === 'object' &&
       promptOrOptions !== null
     ) {
       if (promptOrOptions.prompt) {
-        commandArgs.push('--prompt', promptOrOptions.prompt);
+        commandArgs.push(promptOrOptions.prompt);
       }
       if (promptOrOptions.stdin) {
         execOptions.input = promptOrOptions.stdin;
@@ -995,7 +1010,7 @@ export class TestRig {
     const options: pty.IPtyForkOptions = {
       name: 'xterm-color',
       cols: 80,
-      rows: 24,
+      rows: 80,
       cwd: this.testDir!,
       env: Object.fromEntries(
         Object.entries(env).filter(([, v]) => v !== undefined),
@@ -1007,7 +1022,7 @@ export class TestRig {
 
     const run = new InteractiveRun(ptyProcess);
     // Wait for the app to be ready
-    await run.expectText('Type your message', 30000);
+    await run.expectText('  Type your message or @path/to/file', 30000);
     return run;
   }
 }

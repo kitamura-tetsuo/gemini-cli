@@ -14,13 +14,10 @@ import {
   RetryableQuotaError,
   TerminalQuotaError,
 } from './googleQuotaErrors.js';
+import { getErrorStatus, ModelNotFoundError } from './httpErrors.js';
 
 const FETCH_FAILED_MESSAGE =
   'exception TypeError: fetch failed sending request';
-
-export interface HttpError extends Error {
-  status?: number;
-}
 
 export interface RetryOptions {
   maxAttempts: number;
@@ -146,8 +143,12 @@ export async function retryWithBackoff<T>(
       }
 
       const classifiedError = classifyGoogleError(error);
+      const errorCode = getErrorStatus(error);
 
-      if (classifiedError instanceof TerminalQuotaError) {
+      if (
+        classifiedError instanceof TerminalQuotaError ||
+        classifiedError instanceof ModelNotFoundError
+      ) {
         if (onPersistent429 && authType === AuthType.LOGIN_WITH_GOOGLE) {
           try {
             const fallbackModel = await onPersistent429(
@@ -166,7 +167,10 @@ export async function retryWithBackoff<T>(
         throw classifiedError; // Throw if no fallback or fallback failed.
       }
 
-      if (classifiedError instanceof RetryableQuotaError) {
+      const is500 =
+        errorCode !== undefined && errorCode >= 500 && errorCode < 600;
+
+      if (classifiedError instanceof RetryableQuotaError || is500) {
         if (attempt >= maxAttempts) {
           if (onPersistent429 && authType === AuthType.LOGIN_WITH_GOOGLE) {
             try {
@@ -183,13 +187,28 @@ export async function retryWithBackoff<T>(
               console.warn('Model fallback failed:', fallbackError);
             }
           }
-          throw classifiedError;
+          throw classifiedError instanceof RetryableQuotaError
+            ? classifiedError
+            : error;
         }
-        console.warn(
-          `Attempt ${attempt} failed: ${classifiedError.message}. Retrying after ${classifiedError.retryDelayMs}ms...`,
-        );
-        await delay(classifiedError.retryDelayMs, signal);
-        continue;
+
+        if (classifiedError instanceof RetryableQuotaError) {
+          console.warn(
+            `Attempt ${attempt} failed: ${classifiedError.message}. Retrying after ${classifiedError.retryDelayMs}ms...`,
+          );
+          await delay(classifiedError.retryDelayMs, signal);
+          continue;
+        } else {
+          const errorStatus = getErrorStatus(error);
+          logRetryAttempt(attempt, error, errorStatus);
+
+          // Exponential backoff with jitter for non-quota errors
+          const jitter = currentDelay * 0.3 * (Math.random() * 2 - 1);
+          const delayWithJitter = Math.max(0, currentDelay + jitter);
+          await delay(delayWithJitter, signal);
+          currentDelay = Math.min(maxDelayMs, currentDelay * 2);
+          continue;
+        }
       }
 
       // Generic retry logic for other errors
@@ -200,58 +219,32 @@ export async function retryWithBackoff<T>(
         throw error;
       }
 
-      const { delayDurationMs, errorStatus: delayErrorStatus } =
-        getDelayDurationAndStatus(error);
+      const errorStatus = getErrorStatus(error);
 
-      if (delayDurationMs > 0) {
-        // Respect Retry-After header if present and parsed
+      // Special handling for 429 errors - use longer delay
+      if (errorStatus === 429) {
+        // Use minimum 30 seconds for 429 errors, but respect initialDelayMs if it's smaller (for testing)
+        const minimum429Delay = initialDelayMs < 1000 ? currentDelay : 30000;
+        const delay429Ms = Math.max(currentDelay, minimum429Delay);
         console.warn(
-          `Attempt ${attempt} failed with status ${delayErrorStatus ?? 'unknown'}. Retrying after explicit delay of ${delayDurationMs}ms...`,
+          `Attempt ${attempt} failed with 429 error (no Retry-After header). Retrying after ${delay429Ms}ms...`,
           error,
         );
-        await delay(delayDurationMs);
-        // Reset currentDelay for next potential non-429 error, or if Retry-After is not present next time
-        currentDelay = initialDelayMs;
+        await delay(delay429Ms);
+        currentDelay = Math.min(maxDelayMs, delay429Ms * 1.5); // Slower exponential growth for 429
       } else {
-        // Fall back to exponential backoff with jitter
         logRetryAttempt(attempt, error, errorStatus);
-        // Add jitter: +/- 30% of currentDelay
+
+        // Exponential backoff with jitter for non-quota errors
         const jitter = currentDelay * 0.3 * (Math.random() * 2 - 1);
         const delayWithJitter = Math.max(0, currentDelay + jitter);
-        await delay(delayWithJitter);
+        await delay(delayWithJitter, signal);
         currentDelay = Math.min(maxDelayMs, currentDelay * 2);
       }
     }
   }
 
   throw new Error('Retry attempts exhausted');
-}
-
-/**
- * Extracts the HTTP status code from an error object.
- * @param error The error object.
- * @returns The HTTP status code, or undefined if not found.
- */
-export function getErrorStatus(error: unknown): number | undefined {
-  if (typeof error === 'object' && error !== null) {
-    if ('status' in error && typeof error.status === 'number') {
-      return error.status;
-    }
-    // Check for error.response.status (common in axios errors)
-    if (
-      'response' in error &&
-      typeof (error as { response?: unknown }).response === 'object' &&
-      (error as { response?: unknown }).response !== null
-    ) {
-      const response = (
-        error as { response: { status?: unknown; headers?: unknown } }
-      ).response;
-      if ('status' in response && typeof response.status === 'number') {
-        return response.status;
-      }
-    }
-  }
-  return undefined;
 }
 
 /**

@@ -12,10 +12,12 @@ import {
   FRAME_TIMESTAMP_CAPACITY,
 } from './DebugProfiler.js';
 import { FixedDeque } from 'mnemonist';
+import { debugState } from '../debug.js';
 
 describe('DebugProfiler', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    profiler.profilersActive = 1;
     profiler.numFrames = 0;
     profiler.totalIdleFrames = 0;
     profiler.lastFrameStartTime = 0;
@@ -29,12 +31,14 @@ describe('DebugProfiler', () => {
       Array,
       ACTION_TIMESTAMP_CAPACITY,
     );
+    debugState.debugNumAnimatedComponents = 0;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     profiler.actionTimestamps.clear();
     profiler.possiblyIdleFrameTimestamps.clear();
+    debugState.debugNumAnimatedComponents = 0;
   });
 
   it('should not exceed action timestamp capacity', () => {
@@ -189,6 +193,22 @@ describe('DebugProfiler', () => {
     profiler.reportFrameRendered();
 
     vi.advanceTimersByTime(600);
+    profiler.checkForIdleFrames();
+
+    expect(profiler.totalIdleFrames).toBe(0);
+  });
+
+  it('should not report frames as idle if debugNumAnimatedComponents > 0', async () => {
+    const startTime = Date.now();
+    vi.setSystemTime(startTime);
+    debugState.debugNumAnimatedComponents = 1;
+
+    for (let i = 0; i < 5; i++) {
+      profiler.reportFrameRendered();
+      vi.advanceTimersByTime(20);
+    }
+
+    vi.advanceTimersByTime(1000);
     profiler.checkForIdleFrames();
 
     expect(profiler.totalIdleFrames).toBe(0);

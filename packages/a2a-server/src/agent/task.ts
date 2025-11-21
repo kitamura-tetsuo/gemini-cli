@@ -113,7 +113,7 @@ export class Task {
   // state managed within the @gemini-cli/core module.
   async getMetadata(): Promise<TaskMetadata> {
     const toolRegistry = await this.config.getToolRegistry();
-    const mcpServers = this.config.getMcpServers() || {};
+    const mcpServers = this.config.getMcpClientManager()?.getMcpServers() || {};
     const serverStatuses = getAllMCPServerStatuses();
     const servers = Object.keys(mcpServers).map((serverName) => ({
       name: serverName,
@@ -436,7 +436,6 @@ export class Task {
       onToolCallsUpdate: this._schedulerToolCallsUpdate.bind(this),
       getPreferredEditor: () => 'vscode',
       config: this.config,
-      onEditorClose: () => {},
     });
     return scheduler;
   }
