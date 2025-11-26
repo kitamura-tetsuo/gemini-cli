@@ -30,6 +30,7 @@ import { getCodeAssistServer } from '../code_assist/codeAssist.js';
 import type { Experiments } from '../code_assist/experiments/experiments.js';
 import { getExperiments } from '../code_assist/experiments/experiments.js';
 import { ExperimentFlags } from '../code_assist/experiments/flagNames.js';
+import { HookSystem } from '../hooks/index.js';
 import type { HookDefinition, HookEventName } from '../hooks/types.js';
 import { ideContextStore } from '../ide/ideContext.js';
 import type { MCPOAuthConfig } from '../mcp/oauth-provider.js';
@@ -306,6 +307,7 @@ export interface ConfigParameters {
     [K in HookEventName]?: HookDefinition[];
   };
   previewFeatures?: boolean;
+  enableModelAvailabilityService?: boolean;
 }
 
 export class Config {
@@ -418,9 +420,11 @@ export class Config {
     | undefined;
   private experiments: Experiments | undefined;
   private experimentsPromise: Promise<void> | undefined;
+  private hookSystem?: HookSystem;
 
   private previewModelFallbackMode = false;
   private previewModelBypassMode = false;
+  private readonly enableModelAvailabilityService: boolean;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -479,6 +483,8 @@ export class Config {
     this.bugCommand = params.bugCommand;
     this.model = params.model;
     this.forceModel = params.forceModel ?? false;
+    this.enableModelAvailabilityService =
+      params.enableModelAvailabilityService ?? false;
     this.previewFeatures = params.previewFeatures ?? undefined;
     this.maxSessionTurns = params.maxSessionTurns ?? -1;
     this.experimentalZedIntegration =
@@ -630,6 +636,12 @@ export class Config {
       await this.mcpClientManager.startConfiguredMcpServers(),
       await this.getExtensionLoader().start(this),
     ]);
+
+    // Initialize hook system if enabled
+    if (this.enableHooks) {
+      this.hookSystem = new HookSystem(this);
+      await this.hookSystem.initialize();
+    }
 
     await this.geminiClient.initialize();
   }
@@ -1145,6 +1157,10 @@ export class Config {
     return this.enableExtensionReloading;
   }
 
+  isModelAvailabilityServiceEnabled(): boolean {
+    return this.enableModelAvailabilityService;
+  }
+
   getNoBrowser(): boolean {
     return this.noBrowser;
   }
@@ -1486,6 +1502,13 @@ export class Config {
     await registry.discoverAllTools();
     registry.sortTools();
     return registry;
+  }
+
+  /**
+   * Get the hook system instance
+   */
+  getHookSystem(): HookSystem | undefined {
+    return this.hookSystem;
   }
 
   /**
