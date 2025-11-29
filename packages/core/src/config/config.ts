@@ -26,6 +26,7 @@ import {
 import { tokenLimit } from '../core/tokenLimits.js';
 import type { FallbackModelHandler } from '../fallback/types.js';
 
+import { ModelAvailabilityService } from '../availability/modelAvailabilityService.js';
 import { getCodeAssistServer } from '../code_assist/codeAssist.js';
 import type { Experiments } from '../code_assist/experiments/experiments.js';
 import { getExperiments } from '../code_assist/experiments/experiments.js';
@@ -204,6 +205,8 @@ export class MCPServerConfig {
     readonly targetAudience?: string,
     /* targetServiceAccount format: <service-account-name>@<project-num>.iam.gserviceaccount.com */
     readonly targetServiceAccount?: string,
+    // Include the MCP server initialization instructions in the system instructions
+    readonly useInstructions?: boolean,
   ) {}
 }
 
@@ -296,6 +299,7 @@ export interface ConfigParameters {
   continueOnFailedApiCall?: boolean;
   retryFetchErrors?: boolean;
   enableShellOutputEfficiency?: boolean;
+  shellToolInactivityTimeout?: number;
   fakeResponses?: string;
   recordResponses?: string;
   ptyInfo?: string;
@@ -347,6 +351,7 @@ export class Config {
   private geminiClient!: GeminiClient;
   private baseLlmClient!: BaseLlmClient;
   private modelRouterService: ModelRouterService;
+  private readonly modelAvailabilityService: ModelAvailabilityService;
   private readonly fileFiltering: {
     respectGitIgnore: boolean;
     respectGeminiIgnore: boolean;
@@ -410,6 +415,7 @@ export class Config {
   private readonly continueOnFailedApiCall: boolean;
   private readonly retryFetchErrors: boolean;
   private readonly enableShellOutputEfficiency: boolean;
+  private readonly shellToolInactivityTimeout: number;
   readonly fakeResponses?: string;
   readonly recordResponses?: string;
   private readonly disableYoloMode: boolean;
@@ -485,6 +491,7 @@ export class Config {
     this.forceModel = params.forceModel ?? false;
     this.enableModelAvailabilityService =
       params.enableModelAvailabilityService ?? false;
+    this.modelAvailabilityService = new ModelAvailabilityService();
     this.previewFeatures = params.previewFeatures ?? undefined;
     this.maxSessionTurns = params.maxSessionTurns ?? -1;
     this.experimentalZedIntegration =
@@ -546,6 +553,8 @@ export class Config {
     this.continueOnFailedApiCall = params.continueOnFailedApiCall ?? true;
     this.enableShellOutputEfficiency =
       params.enableShellOutputEfficiency ?? true;
+    this.shellToolInactivityTimeout =
+      (params.shellToolInactivityTimeout ?? 300) * 1000; // 5 minutes
     this.extensionManagement = params.extensionManagement ?? true;
     this.enableExtensionReloading = params.enableExtensionReloading ?? false;
     this.storage = new Storage(this.targetDir);
@@ -1055,6 +1064,10 @@ export class Config {
     return this.modelRouterService;
   }
 
+  getModelAvailabilityService(): ModelAvailabilityService {
+    return this.modelAvailabilityService;
+  }
+
   getEnableRecursiveFileSearch(): boolean {
     return this.fileFiltering.enableRecursiveFileSearch;
   }
@@ -1310,6 +1323,10 @@ export class Config {
 
   getEnableShellOutputEfficiency(): boolean {
     return this.enableShellOutputEfficiency;
+  }
+
+  getShellToolInactivityTimeout(): number {
+    return this.shellToolInactivityTimeout;
   }
 
   getShellExecutionConfig(): ShellExecutionConfig {
